@@ -474,7 +474,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           body: JSON.stringify(productData),
         });
 
-        if (res.status === 401) {
+        const contentType = res.headers.get('content-type') || '';
+        const isJson = contentType.includes('application/json');
+
+        if (res.status === 401 && isJson) {
           showToast('Sessão de administrador expirada. Faça login novamente.', 'error');
           localStorage.removeItem('faby_admin_token');
           setAuthToken(null);
@@ -483,16 +486,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           return;
         }
 
-        if (!res.ok) {
+        // If running with a live backend (Node/Cloud Run), parse and use saved response
+        if (res.ok && isJson) {
+          savedProduct = await res.json();
+        } else if (!res.ok && isJson && res.status !== 405 && res.status !== 404) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || `Erro ${res.status} ao salvar produto.`);
         }
-
-        savedProduct = await res.json();
+        // If 405 (Netlify Method Not Allowed), 404, or HTML rewrite, seamlessly proceed with local storage saving
       } catch (apiErr: any) {
-        console.warn('Backend API update warning:', apiErr);
-        // Only swallow if it's purely a network disconnection in static environment
-        if (apiErr.message && !apiErr.message.includes('Failed to fetch') && !apiErr.message.includes('NetworkError')) {
+        // If it's a 405 or static network error, log and proceed with local storage update
+        if (apiErr.message && !apiErr.message.includes('405') && !apiErr.message.includes('404') && !apiErr.message.includes('Failed to fetch') && !apiErr.message.includes('NetworkError')) {
+          console.warn('Backend API update warning (saving to local storage):', apiErr);
           throw apiErr;
         }
       }
