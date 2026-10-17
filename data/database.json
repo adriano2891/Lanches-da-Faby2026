@@ -729,7 +729,7 @@
       "passwordSalt": "66e7e7b58d2caf60cb226a661943d2a6",
       "recoveryKey": "FABY-E28FFFA3",
       "createdAt": "2026-10-17T07:30:14.829Z",
-      "lastLoginAt": "2026-10-17T22:44:32.636Z"
+      "lastLoginAt": "2026-10-17T23:35:11.861Z"
     }
   ],
   "sessions": {
@@ -748,6 +748,10 @@
     "ef7ec6174832dad392fbdd88ca058946129900fcf64aaf72e4e8aafdf3ebb4a0": {
       "adminId": "admin-1",
       "expiresAt": 1797461072636
+    },
+    "e7472da3f2f7475a337df5028c97478c0923b574f0753bf7e13066ca0ff9986e": {
+      "adminId": "admin-1",
+      "expiresAt": 1797464111861
     }
   }
 }

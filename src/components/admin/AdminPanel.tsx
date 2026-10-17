@@ -22,6 +22,9 @@ import {
   Utensils,
   ChevronDown,
   ChevronUp,
+  Camera,
+  Search,
+  GlassWater,
 } from 'lucide-react';
 import type { StoreConfig, Product, Additional, CoverageArea, DaySchedule, PaymentMethod } from '../../types.ts';
 import { formatPrice } from '../../utils/formatters.ts';
@@ -110,6 +113,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [directUploadingProductId, setDirectUploadingProductId] = useState<string | null>(null);
+
+  // Products Tab search and category filters
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState<string>('todos');
+  const [adminSearchTerm, setAdminSearchTerm] = useState<string>('');
 
   const handleDeviceUpload = async (file: File, onUploaded: (url: string) => void) => {
     if (!file) return;
@@ -140,8 +148,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       img.onload = async () => {
         try {
-          // Sharp Retina proportion: max 1000px keeps great clarity with minimal file size (~80-160KB)
-          const maxDim = 1000;
+          // Sharp Retina proportion: max 800px maintains high definition while keeping file size tiny (~35-65KB)
+          const maxDim = 800;
           let width = img.naturalWidth || img.width;
           let height = img.naturalHeight || img.height;
 
@@ -166,8 +174,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }
 
           const isPng = file.type === 'image/png';
-          // Use JPEG quality 0.82 for optimal speed and lightweight transfer on mobile 4G/5G
-          const optimizedBase64 = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82);
+          // Use JPEG quality 0.78 for optimal speed and lightweight transfer on mobile
+          const optimizedBase64 = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.78);
 
           // Upload to server if session is available
           let finalUrl = optimizedBase64;
@@ -185,12 +193,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 }),
               });
 
-              if (res.ok) {
+              const contentType = res.headers.get('content-type') || '';
+              if (res.ok && contentType.includes('application/json')) {
                 const data = await res.json();
                 if (data.url) {
                   finalUrl = data.url;
                 }
-              } else if (res.status === 401) {
+              } else if (res.status === 401 && contentType.includes('application/json')) {
                 showToast('Sessão expirada. Salve suas alterações e entre novamente.', 'error');
               }
             } catch (netErr) {
@@ -199,7 +208,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }
 
           onUploaded(finalUrl);
-          showToast('Foto carregada com sucesso! Clique em "Salvar Alterações".', 'success');
+          showToast('Foto processada com sucesso! Clique em "Salvar Alterações".', 'success');
         } catch (procErr: any) {
           console.error('Error in canvas processing:', procErr);
           showToast('Erro ao processar imagem. Tente outra foto.', 'error');
@@ -230,6 +239,69 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err: any) {
       showToast(err.message || 'Erro ao carregar imagem.', 'error');
       setUploadingImage(false);
+    }
+  };
+
+  // Direct 1-tap photo change from product card in admin list
+  const handleDirectProductPhotoUpload = async (product: Product, file: File) => {
+    if (!authToken) {
+      showToast('Faça login como administrador para trocar a foto.', 'error');
+      return;
+    }
+    setDirectUploadingProductId(product.id);
+
+    try {
+      await handleDeviceUpload(file, async (uploadedUrl) => {
+        try {
+          setIsSavingProduct(true);
+          let savedProduct: Product | null = null;
+          try {
+            const res = await fetch(`/api/admin/products/${product.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+              },
+              body: JSON.stringify({ ...product, photoUrl: uploadedUrl }),
+            });
+            const contentType = res.headers.get('content-type') || '';
+            if (res.ok && contentType.includes('application/json')) {
+              savedProduct = await res.json();
+            }
+          } catch (e) {
+            console.warn('Direct upload save fetch warning:', e);
+          }
+
+          // Merge and save to localStorage + in-memory
+          const current = getLocalMenuData();
+          const productMap = new Map<string, Product>();
+          current.products.forEach((p) => productMap.set(p.id, p));
+          products.forEach((p) => productMap.set(p.id, p));
+
+          const existing = productMap.get(product.id) || product;
+          productMap.set(product.id, {
+            ...existing,
+            ...(savedProduct || {}),
+            photoUrl: uploadedUrl,
+          });
+
+          const updatedList = Array.from(productMap.values()).sort(
+            (a, b) => (a.order || 99) - (b.order || 99)
+          );
+          saveLocalMenuData({ products: updatedList });
+
+          await onRefreshData();
+          showToast(`Foto de "${product.name}" salva com sucesso no cardápio!`, 'success');
+        } catch (err: any) {
+          showToast(`Erro ao salvar foto: ${err.message}`, 'error');
+        } finally {
+          setIsSavingProduct(false);
+        }
+      });
+    } catch (err: any) {
+      showToast(`Erro no processamento da foto: ${err.message}`, 'error');
+    } finally {
+      setDirectUploadingProductId(null);
     }
   };
 
@@ -504,12 +576,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       // Always update local storage cache with latest data
       const current = getLocalMenuData();
-      let updatedProducts = [...current.products];
+      const productMap = new Map<string, Product>();
+      current.products.forEach((p) => productMap.set(p.id, p));
+      products.forEach((p) => productMap.set(p.id, p));
 
       if (editingProduct && !isCreatingProduct) {
-        updatedProducts = updatedProducts.map((p) =>
-          p.id === editingProduct.id ? ({ ...p, ...productData, ...(savedProduct || {}) } as Product) : p
-        );
+        const existing = productMap.get(editingProduct.id) || editingProduct;
+        const finalProduct: Product = {
+          ...existing,
+          ...productData,
+          ...(savedProduct || {}),
+        } as Product;
+        productMap.set(editingProduct.id, finalProduct);
       } else {
         const newProduct: Product = savedProduct || {
           id: `product_${Date.now()}`,
@@ -520,15 +598,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           ingredients: productData.ingredients || [],
           removableIngredients: productData.removableIngredients || [],
           available: productData.available !== false,
-          order: updatedProducts.length + 1,
+          order: productMap.size + 1,
           photoUrl: productData.photoUrl || '',
           allowedAdditionalIds: productData.allowedAdditionalIds || [],
           isDrink: productData.isDrink,
           drinkDetails: productData.drinkDetails,
         };
-        updatedProducts.push(newProduct);
+        productMap.set(newProduct.id, newProduct);
       }
 
+      const updatedProducts = Array.from(productMap.values()).sort(
+        (a, b) => (a.order || 99) - (b.order || 99)
+      );
       saveLocalMenuData({ products: updatedProducts });
 
       setEditingProduct(null);
