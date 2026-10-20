@@ -318,14 +318,6 @@ class Database {
         const parsed = JSON.parse(raw);
         // Ensure structure sanity
         if (parsed.config && parsed.products && parsed.additionals && parsed.admins) {
-          // Ensure all default products (like beverages/drinks) exist in database
-          const existingIds = new Set(parsed.products.map((p: any) => p.id));
-          DEFAULT_PRODUCTS.forEach(dp => {
-            if (!existingIds.has(dp.id)) {
-              parsed.products.push(dp);
-            }
-          });
-
           // Ensure products have photoUrl if previously empty
           parsed.products = parsed.products.map((p: any) => {
             const def = DEFAULT_PRODUCTS.find(dp => dp.id === p.id);

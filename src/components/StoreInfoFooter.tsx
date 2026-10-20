@@ -29,11 +29,11 @@ export const StoreInfoFooter: React.FC<StoreInfoFooterProps> = ({
   const enabledPayments = config.paymentMethods?.filter((p) => p.enabled) || [];
 
   return (
-    <footer className={`mt-auto bg-stone-900 text-stone-200 border-t border-stone-800 ${hasCartItems ? 'pb-20 sm:pb-5' : 'pb-3 sm:pb-4'}`}>
+    <footer className={`mt-auto bg-stone-900 text-stone-200 border-t border-stone-800 ${hasCartItems ? 'pb-28 sm:pb-12' : 'pb-8 sm:pb-12'}`}>
       {/* Top Banner Accent */}
       <div className="h-1.5 bg-gradient-to-r from-purple-700 via-fuchsia-600 to-amber-400" />
 
-      <div className="max-w-6xl mx-auto px-4 pt-4 sm:pt-5 pb-1 space-y-3.5 sm:space-y-4">
+      <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6 space-y-5 sm:space-y-6">
         {/* Brand & Slogan */}
         <div className="flex flex-col sm:flex-row items-center sm:items-center justify-between gap-3 sm:gap-6 pb-4 sm:pb-5 border-b border-stone-800 text-center sm:text-left">
           <div className="flex flex-col items-center sm:items-start space-y-1">
@@ -158,7 +158,7 @@ export const StoreInfoFooter: React.FC<StoreInfoFooterProps> = ({
         </div>
 
         {/* Bottom Sub-strip */}
-        <div className="pt-2 pb-1 border-t border-stone-800/80 flex items-center justify-center text-center text-[10.5px] sm:text-[11px] text-stone-500">
+        <div className="pt-3 border-t border-stone-800 flex items-center justify-center text-center text-[11px] text-stone-500">
           <p>© {new Date().getFullYear()} Faby Lanches. Todos os direitos reservados.</p>
         </div>
       </div>

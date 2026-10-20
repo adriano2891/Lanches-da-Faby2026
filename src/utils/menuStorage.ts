@@ -12,104 +12,50 @@ export interface MenuDataResponse {
   storeStatus: StoreStatus;
 }
 
-// In-memory cache to guarantee instant synchronization across views and fallback if localStorage has quota issues
-let inMemoryCache: { config: StoreConfig; products: Product[]; additionals: Additional[] } | null = null;
-
 /**
- * Get stored or default local menu data, ensuring all default drinks and items exist
+ * Get stored or default local menu data
  */
 export function getLocalMenuData(): { config: StoreConfig; products: Product[]; additionals: Additional[] } {
-  if (inMemoryCache) {
-    return inMemoryCache;
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_MENU_DATA_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.config && Array.isArray(parsed.products) && Array.isArray(parsed.additionals)) {
-        // Guarantee that all products from DEFAULT_PRODUCTS (especially drinks/bebidas) are included
-        const productMap = new Map<string, Product>();
-        DEFAULT_PRODUCTS.forEach((dp) => productMap.set(dp.id, dp));
-        parsed.products.forEach((p: Product) => {
-          if (p && p.id) {
-            const existing = productMap.get(p.id);
-            productMap.set(p.id, { ...(existing || {}), ...p });
-          }
-        });
-
-        const mergedProducts = Array.from(productMap.values()).sort(
-          (a, b) => (a.order || 99) - (b.order || 99)
-        );
-
-        const result = {
-          config: { ...DEFAULT_CONFIG, ...parsed.config },
-          products: mergedProducts,
-          additionals: parsed.additionals.length > 0 ? parsed.additionals : DEFAULT_ADDITIONALS,
-        };
-        inMemoryCache = result;
-        return result;
+        return parsed;
       }
     }
   } catch (e) {
     console.warn('Could not read local menu cache:', e);
   }
 
-  const defaultResult = {
+  return {
     config: DEFAULT_CONFIG,
     products: DEFAULT_PRODUCTS,
     additionals: DEFAULT_ADDITIONALS,
   };
-  inMemoryCache = defaultResult;
-  return defaultResult;
 }
 
 /**
- * Save updated menu data to localStorage and in-memory cache
+ * Save updated menu data to localStorage
  */
 export function saveLocalMenuData(data: {
   config?: StoreConfig;
   products?: Product[];
   additionals?: Additional[];
 }) {
-  const current = getLocalMenuData();
-  const updated = {
-    config: data.config || current.config,
-    products: data.products || current.products,
-    additionals: data.additionals || current.additionals,
-  };
-
-  inMemoryCache = updated;
-
   try {
+    const current = getLocalMenuData();
+    const updated = {
+      config: data.config || current.config,
+      products: data.products || current.products,
+      additionals: data.additionals || current.additionals,
+    };
     localStorage.setItem(LOCAL_MENU_DATA_KEY, JSON.stringify(updated));
+    return updated;
   } catch (e) {
-    console.warn('LocalStorage quota or write warning (persisting in memory):', e);
+    console.warn('Could not save local menu cache:', e);
+    return getLocalMenuData();
   }
-
-  return updated;
-}
-
-/**
- * Update a specific product directly in local cache
- */
-export function updateLocalProduct(id: string, updates: Partial<Product>): Product[] {
-  const current = getLocalMenuData();
-  const index = current.products.findIndex((p) => p.id === id);
-  let updatedProducts: Product[];
-
-  if (index > -1) {
-    updatedProducts = current.products.map((p) =>
-      p.id === id ? ({ ...p, ...updates } as Product) : p
-    );
-  } else {
-    const def = DEFAULT_PRODUCTS.find((p) => p.id === id);
-    const newProd = ({ ...(def || {}), id, ...updates } as Product);
-    updatedProducts = [...current.products, newProd];
-  }
-
-  saveLocalMenuData({ products: updatedProducts });
-  return updatedProducts;
 }
 
 /**
